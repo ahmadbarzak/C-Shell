@@ -33,7 +33,11 @@ void changeDirectory(char* line, char* path)
             path[j-3] = line[j];
             j++;
         }
-        chdir(path);
+        int isValid = chdir(path);
+        if (isValid == -1)
+        {
+            printf("cd: %s: No such file or directory\n", path);
+        }
     }
     else
     {
