@@ -5,22 +5,22 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-//Global Variables:
+// Global Variables:
 int numCommands = 0;
 char **history;
 
-//Prototype Declarations:
+// Prototype Declarations:
 int CommandIndex(char *line, int numChars);
-void getCommand(char *line, char *path, int numChars);
-void addToHistory(char *line);
-void changeDirectory(char *line);
+void GetCommand(char *line, char *path, int numChars);
+void AddToHistory(char *line);
+void ChangeDirectory(char *line);
 int CdCheck(char *line);
 void PrintTableEntries();
 void PrintTableEntries();
 int ExecuteBasicCommand(char *command);
 int SpecialCommandsCheck(char *line);
 void ExecuteFullCommand(char *line);
-void MakeHistoryTable(char *line);
+void ExecuteHistoryCommand(char *line);
 int HistoryCheck(char *line);
 char *InputProcessor();
 
@@ -30,22 +30,17 @@ int main(int argc, char *argv[])
     // Introduce user to Ahsh Shell
     printf("Welcome to ahsh Shell!\n");
     printf("--------------------------\n\n");
-    history = malloc(10 * sizeof(char*));
+    history = malloc(10 * sizeof(char *));
     // This part does not repeat, hence outside of while loop.
     while (1)
     {
-        // every iteration of the while loop should represent the following
-        // An input is taken in
-        // this input is processed into tokens
-        // these tokens are taken and executed.
         printf("ahsh>  ");
-        // set up a char array and size value, so the user's input can be taken and put into this array.
-
+        // every iteration of the while loop should represent the following:
+        
+        // An input is taken in and processed
         char *processedLine = InputProcessor();
-        // note that when the user types their input, the enter key is used to signal that they have finished typing.
-        // this leaves getline with an extra \n, so we manually remove this.
 
-        // check if the word you want is a special command:
+        // this processed input is executed
         ExecuteFullCommand(processedLine);
     }
     return 0;
@@ -67,7 +62,7 @@ int CommandIndex(char *line, int numChars)
     return 0;
 }
 
-void getCommand(char *line, char *path, int numChars)
+void GetCommand(char *line, char *path, int numChars)
 {
     int i = numChars;
     while (line[i] != '\0')
@@ -79,11 +74,11 @@ void getCommand(char *line, char *path, int numChars)
     }
 }
 
-void addToHistory(char *line)
+void AddToHistory(char *line)
 {
     char *pathString = malloc(100 * sizeof(char));
     int index = CommandIndex(line, 0);
-    getCommand(line, pathString, index);
+    GetCommand(line, pathString, index);
     int i = 0;
     while (history[i] != NULL)
     {
@@ -103,7 +98,7 @@ void addToHistory(char *line)
     }
 }
 
-void changeDirectory(char *line)
+void ChangeDirectory(char *line)
 {
     int j = 3;
     // check if the current line contains a directory for
@@ -113,7 +108,7 @@ void changeDirectory(char *line)
     if (numChars > 0)
     {
         char *path = malloc(100 * sizeof(char));
-        getCommand(line, path, 3);
+        GetCommand(line, path, 3);
 
         // change the directory, no directory change will happen
         // if it's invalid, but it will return -1, hence
@@ -125,14 +120,14 @@ void changeDirectory(char *line)
         }
         else
         {
-            addToHistory(line);
+            AddToHistory(line);
             numCommands++;
         }
     }
     else
     {
         chdir("/home");
-        addToHistory(line);
+        AddToHistory(line);
         numCommands++;
     }
 }
@@ -144,7 +139,7 @@ int CdCheck(char *line)
     {
         // if so, change the directory to home.
         chdir("/home");
-        addToHistory(line);
+        AddToHistory(line);
         numCommands++;
         return 1;
     }
@@ -153,7 +148,7 @@ int CdCheck(char *line)
     //  more spaces so we need to check both cases).
     else if (strncmp(line, "cd ", 3) == 0)
     {
-        changeDirectory(line);
+        ChangeDirectory(line);
         return 1;
     }
     return 0;
@@ -207,7 +202,7 @@ int ExecuteBasicCommand(char *command)
         pid_t pid = waitpid(id, NULL, 0);
         free(tokens);
         numCommands++;
-        addToHistory(line);
+        AddToHistory(line);
     }
 }
 
@@ -231,7 +226,7 @@ void ExecuteFullCommand(char *line)
     }
 }
 
-void MakeHistoryTable(char *line)
+void ExecuteHistoryCommand(char *line)
 {
     char **tokens = malloc(100 * sizeof(char *));
     tokens[0] = strtok(line, " ");
@@ -249,14 +244,13 @@ void MakeHistoryTable(char *line)
         {
             bottomOfList = numCommands - 9;
         }
-        if((historyNumber >= bottomOfList) && (historyNumber <= numCommands))
+        if ((historyNumber >= bottomOfList) && (historyNumber <= numCommands))
         {
             int historyIndex = historyNumber - bottomOfList;
             char *currentCommand = malloc(100 * sizeof(char));
             currentCommand = history[historyIndex];
             ExecuteFullCommand(currentCommand);
         }
-        
     }
     free(tokens);
 }
@@ -265,14 +259,14 @@ int HistoryCheck(char *line)
 {
     if ((strcmp(line, "history") == 0) || (strcmp(line, "h") == 0))
     {
-        addToHistory(line);
+        AddToHistory(line);
         numCommands++;
         PrintTableEntries();
         return 1;
     }
     else if ((strncmp(line, "history ", 8) == 0) || (strncmp(line, "h ", 2) == 0))
     {
-        MakeHistoryTable(line);
+        ExecuteHistoryCommand(line);
         return 1;
     }
     return 0;
@@ -285,7 +279,7 @@ char *InputProcessor()
     size_t characters = getline(&line, &size, stdin);
     char *shortLine = malloc(100 * sizeof(char));
     int index = CommandIndex(line, 0);
-    getCommand(line, shortLine, index);
+    GetCommand(line, shortLine, index);
     shortLine[strlen(shortLine) - 1] = '\0';
     return shortLine;
 }
