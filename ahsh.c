@@ -5,7 +5,51 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+//Global Variables:
 int numCommands = 0;
+char **history;
+
+//Prototype Declarations:
+int CommandIndex(char *line, int numChars);
+void getCommand(char *line, char *path, int numChars);
+void addToHistory(char *line);
+void changeDirectory(char *line);
+int CdCheck(char *line);
+void PrintTableEntries();
+void PrintTableEntries();
+int ExecuteBasicCommand(char *command);
+int SpecialCommandsCheck(char *line);
+void ExecuteFullCommand(char *line);
+void MakeHistoryTable(char *line);
+int HistoryCheck(char *line);
+char *InputProcessor();
+
+int main(int argc, char *argv[])
+{
+
+    // Introduce user to Ahsh Shell
+    printf("Welcome to ahsh Shell!\n");
+    printf("--------------------------\n\n");
+    history = malloc(10 * sizeof(char*));
+    // This part does not repeat, hence outside of while loop.
+    while (1)
+    {
+        // every iteration of the while loop should represent the following
+        // An input is taken in
+        // this input is processed into tokens
+        // these tokens are taken and executed.
+        printf("ahsh>  ");
+        // set up a char array and size value, so the user's input can be taken and put into this array.
+
+        char *processedLine = InputProcessor();
+        // note that when the user types their input, the enter key is used to signal that they have finished typing.
+        // this leaves getline with an extra \n, so we manually remove this.
+
+        // check if the word you want is a special command:
+        ExecuteFullCommand(processedLine);
+    }
+    return 0;
+}
 
 int CommandIndex(char *line, int numChars)
 { // if we are in this function, then the line must
@@ -35,78 +79,10 @@ void getCommand(char *line, char *path, int numChars)
     }
 }
 
-void changeDirectory(char *line, char *path)
-{
-    int j = 3;
-    // check if the current line contains a directory for
-    // cd to take the user to, otherwise if none is inputted,
-    // cd should take the user to the home directory.
-    int numChars = CommandIndex(line, 3);
-    if (numChars > 0)
-    {
-        getCommand(line, path, 3);
-
-        // change the directory, no directory change will happen
-        // if it's invalid, but it will return -1, hence
-        // we print that there is no file or directory.
-        int isValid = chdir(path);
-        if (isValid == -1)
-        {
-            printf("cd: %s: No such file or directory\n", path);
-        }
-        else
-        {
-            numCommands++;
-        }
-    }
-    else
-    {
-        chdir("/home");
-        numCommands++;
-    }
-}
-
-int CdCheck(char *line, char *path)
-{
-    // first check if cd is the only thing in the line
-    if (strcmp(line, "cd") == 0)
-    {
-        // if so, change the directory to home.
-        chdir("/home");
-        numCommands++;
-        return 1;
-    }
-    // if the line contains "cd ", there is potential
-    // that the line contains a directory (or perhaps just
-    //  more spaces so we need to check both cases).
-    else if (strncmp(line, "cd ", 3) == 0)
-    {
-        changeDirectory(line, path);
-        return 1;
-    }
-    return 0;
-}
-
-void PrintTableEntries(char **history)
-{
-    int i = 0;
-    for (int i = 0; i < 10; i++)
-    {
-        if (history[i] == NULL)
-        {
-            printf("%d:\n", (i + 1));
-        }
-        else
-        {
-            printf("%d: %s\n", (i + 1), history[i]);
-        }
-    }
-}
-
-void addToHistory(char *line, int numChars, char **history)
+void addToHistory(char *line)
 {
     char *pathString = malloc(100 * sizeof(char));
-    int index = CommandIndex(line, numChars);
+    int index = CommandIndex(line, 0);
     getCommand(line, pathString, index);
     int i = 0;
     while (history[i] != NULL)
@@ -125,10 +101,87 @@ void addToHistory(char *line, int numChars, char **history)
         }
         history[9] = pathString;
     }
-    free(pathString);
 }
 
-int ExecuteCommand(char *command, char **history)
+void changeDirectory(char *line)
+{
+    int j = 3;
+    // check if the current line contains a directory for
+    // cd to take the user to, otherwise if none is inputted,
+    // cd should take the user to the home directory.
+    int numChars = CommandIndex(line, 3);
+    if (numChars > 0)
+    {
+        char *path = malloc(100 * sizeof(char));
+        getCommand(line, path, 3);
+
+        // change the directory, no directory change will happen
+        // if it's invalid, but it will return -1, hence
+        // we print that there is no file or directory.
+        int isValid = chdir(path);
+        if (isValid == -1)
+        {
+            printf("cd: %s: No such file or directory\n", path);
+        }
+        else
+        {
+            addToHistory(line);
+            numCommands++;
+        }
+    }
+    else
+    {
+        chdir("/home");
+        addToHistory(line);
+        numCommands++;
+    }
+}
+
+int CdCheck(char *line)
+{
+    // first check if cd is the only thing in the line
+    if (strcmp(line, "cd") == 0)
+    {
+        // if so, change the directory to home.
+        chdir("/home");
+        addToHistory(line);
+        numCommands++;
+        return 1;
+    }
+    // if the line contains "cd ", there is potential
+    // that the line contains a directory (or perhaps just
+    //  more spaces so we need to check both cases).
+    else if (strncmp(line, "cd ", 3) == 0)
+    {
+        changeDirectory(line);
+        return 1;
+    }
+    return 0;
+}
+
+void PrintTableEntries()
+{
+    int bottomOfList = 1;
+    if (numCommands > 10)
+    {
+        bottomOfList = numCommands - 9;
+    }
+
+    for (int i = 0; i < 10; i++)
+    {
+        if (history[i] == NULL)
+        {
+            printf("%d:\n", bottomOfList);
+        }
+        else
+        {
+            printf("%d: %s\n", bottomOfList, history[i]);
+        }
+        bottomOfList++;
+    }
+}
+
+int ExecuteBasicCommand(char *command)
 {
     char *line = malloc(100 * sizeof(char));
     strcpy(line, command);
@@ -146,71 +199,22 @@ int ExecuteCommand(char *command, char **history)
     {
         if (execvp(tokens[0], tokens) == -1)
         {
-            perror("invalid command");
+            perror(line);
         }
     }
     else
     {
-        pid_t pid = waitpid(0, NULL, id);
+        pid_t pid = waitpid(id, NULL, 0);
         free(tokens);
         numCommands++;
-        addToHistory(line, 0, history);
+        addToHistory(line);
     }
 }
 
-void MakeHistoryTable(int noCommand, char **history, char *line, char *path)
+int SpecialCommandsCheck(char *line)
 {
-
-    if (noCommand)
-    {
-        PrintTableEntries(history);
-    }
-    else
-    {
-        int index = CommandIndex(line, 8);
-        getCommand(line, path, index);
-        int i = 0;
-        while (history[i] != NULL)
-        {
-            i++;
-        }
-        if (i < 10)
-        {
-            history[i] = path;
-            PrintTableEntries(history);
-        }
-        else
-        {
-            for (int j = 0; j < 9; j++)
-            {
-                history[j] = history[j + 1];
-            }
-            history[9] = path;
-            PrintTableEntries(history);
-            ExecuteCommand(path, history);
-        }
-    }
-}
-
-int HistoryCheck(char *line, char *path, char **history)
-{
-    if ((strcmp(line, "history") == 0) || (strcmp(line, "h") == 0))
-    {
-        MakeHistoryTable(1, history, line, path);
-        return 1;
-    }
-    else if ((strncmp(line, "history ", 8) == 0) || (strncmp(line, "h ", 2) == 0))
-    {
-        MakeHistoryTable(0, history, line, path);
-        return 1;
-    }
-    return 0;
-}
-
-int SpecialCommandsCheck(char *line, char *path, char **history)
-{
-    int CdExecuted = CdCheck(line, path);
-    int HistoryExecuted = HistoryCheck(line, path, history);
+    int CdExecuted = CdCheck(line);
+    int HistoryExecuted = HistoryCheck(line);
     if (CdExecuted || HistoryExecuted)
     {
         return 1;
@@ -218,40 +222,70 @@ int SpecialCommandsCheck(char *line, char *path, char **history)
     return 0;
 }
 
-int main(int argc, char *argv[])
+void ExecuteFullCommand(char *line)
 {
-
-    // Introduce user to Ahsh Shell
-    printf("Welcome to ahsh Shell!\n");
-    printf("--------------------------\n\n");
-    // This part does not repeat, hence outside of while loop.
-    char **history = malloc(10 * sizeof(char *));
-    while (1)
+    int alreadyExecuted = SpecialCommandsCheck(line);
+    if (!alreadyExecuted)
     {
-        // every iteration of the while loop should represent the following
-        // An input is taken in
-        // this input is processed into tokens
-        // these tokens are taken and executed.
-        printf("ahsh>  ");
-        // set up a char array and size value, so the user's input can be taken and put into this array.
-        char *line = malloc(100 * sizeof(char));
-        size_t size = 0;
-        size_t characters = getline(&line, &size, stdin);
+        ExecuteBasicCommand(line);
+    }
+}
 
-        // note that when the user types their input, the enter key is used to signal that they have finished typing.
-        // this leaves getline with an extra \n, so we manually remove this.
-        line[strlen(line) - 1] = '\0';
-
-        // allocate some memory to store the path section of the line.
-        char *path = malloc(100 * sizeof(char));
-
-        // check if the word you want is a special command:
-        int alreadyExecuted = SpecialCommandsCheck(line, path, history);
-        if (!alreadyExecuted)
+void MakeHistoryTable(char *line)
+{
+    char **tokens = malloc(100 * sizeof(char *));
+    tokens[0] = strtok(line, " ");
+    tokens[1] = strtok(NULL, " ");
+    tokens[2] = strtok(NULL, " ");
+    int historyNumber = atoi(tokens[1]);
+    if (tokens[2] != NULL)
+    {
+        perror("Two many arguments");
+    }
+    else
+    {
+        int bottomOfList = 1;
+        if (numCommands > 10)
         {
-            ExecuteCommand(line, history);
+            bottomOfList = numCommands - 9;
         }
-        printf("%d\n", numCommands);
+        if((historyNumber >= bottomOfList) && (historyNumber <= numCommands))
+        {
+            int historyIndex = historyNumber - bottomOfList;
+            char *currentCommand = malloc(100 * sizeof(char));
+            currentCommand = history[historyIndex];
+            ExecuteFullCommand(currentCommand);
+        }
+        
+    }
+    free(tokens);
+}
+
+int HistoryCheck(char *line)
+{
+    if ((strcmp(line, "history") == 0) || (strcmp(line, "h") == 0))
+    {
+        addToHistory(line);
+        numCommands++;
+        PrintTableEntries();
+        return 1;
+    }
+    else if ((strncmp(line, "history ", 8) == 0) || (strncmp(line, "h ", 2) == 0))
+    {
+        MakeHistoryTable(line);
+        return 1;
     }
     return 0;
+}
+
+char *InputProcessor()
+{
+    char *line = malloc(100 * sizeof(char));
+    size_t size = 0;
+    size_t characters = getline(&line, &size, stdin);
+    char *shortLine = malloc(100 * sizeof(char));
+    int index = CommandIndex(line, 0);
+    getCommand(line, shortLine, index);
+    shortLine[strlen(shortLine) - 1] = '\0';
+    return shortLine;
 }
