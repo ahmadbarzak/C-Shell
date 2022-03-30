@@ -56,7 +56,7 @@ char **Tokeniser(char *line, char *delim);
 // to become the input of the second command wc
 int main(int argc, char *argv[])
 {
-
+    int isFile = !isatty(STDIN_FILENO);
     // Introduce user to Ahsh Shell
     printf("Welcome to ahsh Shell!\n");
     printf("--------------------------\n\n");
@@ -68,6 +68,11 @@ int main(int argc, char *argv[])
         printf("ahsh>  ");
 
         char *inputLine = LineOutput();
+        if (!inputLine)
+        {
+            continue;
+        }
+
         char *processedLine = malloc(maxCharacters * sizeof(char));
         memcpy(processedLine, inputLine, maxCharacters * sizeof(char));
         BackgroundProcessCheck(processedLine);
@@ -81,9 +86,12 @@ int main(int argc, char *argv[])
         // to do multiple pipes this will be a recursive process.
 
         // ExecuteBasicCommand(processedLine, 1);
+        if (isFile)
+        {
+            printf("%s\n", inputLine);
+        }
         ExecuteFullCommand(processedLine, inputLine);
         jobChecker();
-        
     }
     return 0;
 }
@@ -341,8 +349,19 @@ char **InputProcessor(char *line)
 char *LineOutput()
 {
     size_t size = 0;
-    getline(&currentLine, &size, stdin);
+    int length = getline(&currentLine, &size, stdin);
+
+    if (length == -1)
+    {
+        exit(0);
+    }
+    // account for new line from enter
     currentLine[strlen(currentLine) - 1] = '\0';
+    length--;
+    if (length == 0)
+    {
+        return NULL;
+    }
     char *processedLine = malloc(maxCharacters * sizeof(char));
     memcpy(processedLine, currentLine, maxCharacters * sizeof(char));
     return processedLine;
@@ -379,6 +398,7 @@ void PipeProcess(char **pipeTokens, char *history)
             if (execvp(tokens[0], tokens) == -1)
             {
                 perror("executing problem");
+                exit(1);
             }
         }
         else
@@ -497,4 +517,4 @@ void jobChecker()
         }
         i++;
     }
-} 
+}
