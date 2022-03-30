@@ -5,13 +5,13 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-typedef struct Job 
+typedef struct Job
 {
     int jobNum;
     pid_t jobId;
     char *status;
     char *commandLine;
-}currentJob;
+} currentJob;
 
 // Global Variables:
 
@@ -34,18 +34,17 @@ int CdCheck(char *line);
 void ChangeDirectory(char *line);
 int CommandIndex(char *line, int numChars, char delim, int equal);
 int ExecuteBasicCommand(char *command, int addHistory);
-void ExecuteFullCommand(char *processedLine);
+void ExecuteFullCommand(char *processedLine, char *history);
 void ExecuteHistoryCommand(char *line);
 char *GetCommand(char *line, int numChars);
-char* GetStatus(pid_t id);
+char *GetStatus(pid_t id);
 int HistoryCheck(char *line);
 char **InputProcessor(char *line);
 char *LineOutput();
-void PipeProcess(char **pipeTokens);
+void PipeProcess(char **pipeTokens, char *history);
 void PrintTableEntries();
 int SpecialCommandsCheck(char *line);
 char **Tokeniser(char *line, char *delim);
-
 
 // we will use read()
 // we will use write()
@@ -67,7 +66,8 @@ int main(int argc, char *argv[])
         printf("ahsh>  ");
 
         char *processedLine = LineOutput();
-
+        char *history = malloc(maxCharacters*sizeof(char));
+        history = processedLine;
         // every iteration of the while loop should represent the following:
 
         // An input is taken in and processed into executable commands.
@@ -76,9 +76,9 @@ int main(int argc, char *argv[])
 
         // undergo a method that handles the piping for each command
         // to do multiple pipes this will be a recursive process.
-        
-        ExecuteBasicCommand(processedLine, 1);
-        // ExecuteFullCommand(processedLine);
+
+        // ExecuteBasicCommand(processedLine, 1);
+        ExecuteFullCommand(processedLine, history);
     }
     return 0;
 }
@@ -108,20 +108,20 @@ void AddToHistory(char *line)
 
 void BackgroundProcessCheck(char *line)
 {
-    char **tokens = malloc(maxCharacters*sizeof(char*));
+    char **tokens = malloc(maxCharacters * sizeof(char *));
     tokens = Tokeniser(line, " ");
     int i = 0;
     while (tokens[i] != NULL)
     {
         i++;
     }
-    char *lastToken = malloc(maxCharacters*sizeof(char));
-    memcpy(lastToken, tokens[i-1], maxCharacters*sizeof(char));
+    char *lastToken = malloc(maxCharacters * sizeof(char));
+    memcpy(lastToken, tokens[i - 1], maxCharacters * sizeof(char));
     if (strcmp(lastToken, "&") == 0)
     {
         isBackgroundTask = 1;
         int ampLocation = 0;
-        while(line[ampLocation] != '&')
+        while (line[ampLocation] != '&')
         {
             ampLocation++;
         }
@@ -205,7 +205,7 @@ int CommandIndex(char *line, int numChars, char delim, int equal)
         {
             return numChars;
         }
-        
+
         numChars++;
     }
     return 0;
@@ -213,8 +213,9 @@ int CommandIndex(char *line, int numChars, char delim, int equal)
 
 int ExecuteBasicCommand(char *command, int addHistory)
 {
+    BackgroundProcessCheck(command);
     char *line = malloc(maxCharacters * sizeof(char));
-    strcpy(line, command);
+    memcpy(line, command, maxCharacters*sizeof(char));
     char delim[] = " ";
     char **tokens = malloc(maxCharacters * sizeof(char *));
     int i = 0;
@@ -234,28 +235,26 @@ int ExecuteBasicCommand(char *command, int addHistory)
     }
     else
     {
-        if(!isBackgroundTask)
+        if (!isBackgroundTask)
         {
-            // GetStatus(id);
-            printf("no Ampersand\n");
             pid_t pid = waitpid(id, NULL, 0);
         }
-        else{
-            char* status = GetStatus(id);
+        else
+        {
+            char *status = GetStatus(id);
 
             struct Job currentJob;
             currentJob.jobId = id;
             currentJob.jobNum = jobNumber;
             currentJob.status = status;
             currentJob.commandLine = currentLine;
-            
+
             printf("[%d]  %d  %s\n", jobNumber, id, status);
 
             jobs[jobIndex] = currentJob;
             numJobs++;
             jobNumber++;
             jobIndex++;
-            
         }
         free(tokens);
         numCommands++;
@@ -266,13 +265,13 @@ int ExecuteBasicCommand(char *command, int addHistory)
     }
 }
 
-void ExecuteFullCommand(char *processedLine)
+void ExecuteFullCommand(char *processedLine, char *history)
 {
     int alreadyExecuted = SpecialCommandsCheck(processedLine);
     if (!alreadyExecuted)
     {
         char **pipeTokens = InputProcessor(processedLine);
-        PipeProcess(pipeTokens);
+        PipeProcess(pipeTokens, history);
     }
 }
 
@@ -299,7 +298,8 @@ void ExecuteHistoryCommand(char *line)
             int historyIndex = historyNumber - bottomOfList;
             char *currentCommand = malloc(maxCharacters * sizeof(char));
             currentCommand = history[historyIndex];
-            ExecuteFullCommand(currentCommand);
+            // addToHistory(currentCommand);
+            ExecuteFullCommand(currentCommand, currentCommand);
         }
     }
     free(tokens);
@@ -319,9 +319,9 @@ char *GetCommand(char *line, int numChars)
     return path;
 }
 
-char* GetStatus(pid_t id)
+char *GetStatus(pid_t id)
 {
-  
+
     char idString[100];
     sprintf(idString, "%d", id);
     char StatusString[20];
@@ -329,25 +329,24 @@ char* GetStatus(pid_t id)
     strcat(pidPath, idString);
     strcat(pidPath, "/status");
 
-
-    FILE* fp = fopen(pidPath, "r");
-    char* currentLine = malloc(maxCharacters*sizeof(char));
+    FILE *fp = fopen(pidPath, "r");
+    char *currentLine = malloc(maxCharacters * sizeof(char));
     if (fp == NULL)
     {
         perror("cannot open file");
     }
 
-    char *statusLine = malloc(maxCharacters*sizeof(char));
+    char *statusLine = malloc(maxCharacters * sizeof(char));
 
     for (int i = 0; i < 3; i++)
     {
-        statusLine = fgets(currentLine, maxCharacters*sizeof(char),  fp);
+        statusLine = fgets(currentLine, maxCharacters * sizeof(char), fp);
     }
     int index = CommandIndex(statusLine, 1, '\t', 1);
     int j = 0;
-    char *status = malloc(maxCharacters*sizeof(char));
+    char *status = malloc(maxCharacters * sizeof(char));
 
-    while(statusLine[index+1] != ' ')
+    while (statusLine[index + 1] != ' ')
     {
         status[j] = statusLine[index + 1];
         j++;
@@ -355,7 +354,6 @@ char* GetStatus(pid_t id)
     }
 
     return status;
-
 }
 
 int HistoryCheck(char *line)
@@ -393,13 +391,12 @@ char *LineOutput()
     size_t size = 0;
     getline(&currentLine, &size, stdin);
     currentLine[strlen(currentLine) - 1] = '\0';
-    char *processedLine = malloc(maxCharacters*sizeof(char));
-    memcpy(processedLine, currentLine, maxCharacters*sizeof(char));
-    BackgroundProcessCheck(processedLine);
+    char *processedLine = malloc(maxCharacters * sizeof(char));
+    memcpy(processedLine, currentLine, maxCharacters * sizeof(char));
     return processedLine;
 }
 
-void PipeProcess(char **pipeTokens)
+void PipeProcess(char **pipeTokens, char *history)
 {
     int *fd = malloc(2 * sizeof(int));
     pid_t id;
@@ -435,9 +432,8 @@ void PipeProcess(char **pipeTokens)
         }
     }
     numCommands++;
-    char *historyLine = malloc(maxCharacters*sizeof(char));
-    memcpy(historyLine, currentLine, maxCharacters*sizeof(char));
-    AddToHistory(historyLine);
+
+    AddToHistory(history);
 }
 
 void PrintTableEntries()
@@ -477,7 +473,7 @@ char **Tokeniser(char *line, char *delim)
 {
     char *lineCopy = malloc(maxCharacters * sizeof(char));
     memcpy(lineCopy, line, maxCharacters * sizeof(char));
-    char **tokens = malloc(maxCharacters * sizeof(char*));
+    char **tokens = malloc(maxCharacters * sizeof(char *));
     int i = 0;
     tokens[i] = strtok(lineCopy, delim);
     while (tokens[i] != NULL)
