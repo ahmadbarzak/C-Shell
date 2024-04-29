@@ -24,17 +24,18 @@ int isBackgroundTask = 0;
 int maxJobs = 500;
 int jobIndex = 0;
 int numJobs = 0;
-Job *jobs;
+struct Job *jobs;
 char **history;
 
 // Prototype Declarations:
+int JobsCheck(char *line);
 void jobChecker();
 void AddToHistory(char *line);
 void BackgroundProcessCheck(char *line);
 int CdCheck(char *line);
 void ChangeDirectory(char *line);
 int CommandIndex(char *line, int numChars, char delim, int equal);
-int ExecuteBasicCommand(char *command);
+int ExecuteBasicCommand(char *command, int addHistory);
 void ExecuteFullCommand(char *processedLine, char *history);
 void ExecuteHistoryCommand(char *line);
 char *GetCommand(char *line, int numChars);
@@ -55,21 +56,26 @@ char **Tokeniser(char *line, char *delim);
 // to become the input of the second command wc
 int main(int argc, char *argv[])
 {
-
+    int isFile = !isatty(STDIN_FILENO);
     // Introduce user to Ahsh Shell
     printf("Welcome to ahsh Shell!\n");
     printf("--------------------------\n\n");
     history = malloc(numHistoryCommands * sizeof(char *));
-    jobs = malloc(maxJobs * sizeof(Job));
+    jobs = malloc(maxJobs * sizeof(int));
     // This part does not repeat, hence outside of while loop.
     while (1)
     {
-
         printf("ahsh>  ");
 
-        char *processedLine = LineOutput();
-        char *historyLine = malloc(maxCharacters * sizeof(char));
-        historyLine = processedLine;
+        char *inputLine = LineOutput();
+        if (!inputLine)
+        {
+            continue;
+        }
+
+        char *processedLine = malloc(maxCharacters * sizeof(char));
+        memcpy(processedLine, inputLine, maxCharacters * sizeof(char));
+        BackgroundProcessCheck(processedLine);
         // every iteration of the while loop should represent the following:
 
         // An input is taken in and processed into executable commands.
@@ -78,10 +84,14 @@ int main(int argc, char *argv[])
 
         // undergo a method that handles the piping for each command
         // to do multiple pipes this will be a recursive process.
-        ExecuteFullCommand(processedLine, historyLine);
-        // ExecuteBasicCommand(processedLine);
+
+        // ExecuteBasicCommand(processedLine, 1);
+        if (isFile)
+        {
+            printf("%s\n", inputLine);
+        }
+        ExecuteFullCommand(processedLine, inputLine);
         jobChecker();
-        //
     }
     return 0;
 }
@@ -136,20 +146,6 @@ void BackgroundProcessCheck(char *line)
     }
     free(lastToken);
     free(tokens);
-}
-
-int JobsCheck(char *line)
-{
-    if (strcmp(line, "jobs") == 0)
-    {
-        int i = 0;
-        while (jobs[i].jobId > 0)
-        {
-            printf("[%d]  <%s>  %s\n", jobs[i].jobId, jobs[i].status, jobs[i].commandLine);
-        }
-        return 1;
-    }
-    return 0;
 }
 
 int CdCheck(char *line)
@@ -228,46 +224,12 @@ int CommandIndex(char *line, int numChars, char delim, int equal)
     return 0;
 }
 
-int ExecuteBasicCommand(char *command)
-{
-    BackgroundProcessCheck(command);
-    char *line = malloc(maxCharacters * sizeof(char));
-    memcpy(line, command, maxCharacters * sizeof(char));
-    char delim[] = " ";
-    char **tokens = malloc(maxCharacters * sizeof(char *));
-    int i = 0;
-    tokens[i] = strtok(command, delim);
-    while (tokens[i] != NULL)
-    {
-        i++;
-        tokens[i] = strtok(NULL, delim);
-    }
-    pid_t id = fork();
-    if (id == 0)
-    {
-        if (execvp(tokens[0], tokens) == -1)
-        {
-            perror(line);
-        }
-    }
-    else
-    {
-        if (!isBackgroundTask)
-        {
-            // WUNTRACE
-            pid_t pid = waitpid(id, NULL, 0);
-        }
-
-        free(tokens);
-        numCommands++;
-    }
-}
-
 void ExecuteFullCommand(char *processedLine, char *history)
 {
     int alreadyExecuted = SpecialCommandsCheck(processedLine);
     if (!alreadyExecuted)
     {
+
         char **pipeTokens = InputProcessor(processedLine);
         PipeProcess(pipeTokens, history);
     }
@@ -332,7 +294,6 @@ char *GetStatus(pid_t id)
     if (fp == NULL)
     {
         perror("cannot open file");
-        return NULL;
     }
 
     char *statusLine = malloc(maxCharacters * sizeof(char));
@@ -341,16 +302,17 @@ char *GetStatus(pid_t id)
     {
         statusLine = fgets(currentLine, maxCharacters * sizeof(char), fp);
     }
-    int index = CommandIndex(statusLine, 1, '(', 1);
+    int index = CommandIndex(statusLine, 1, '\t', 1);
     int j = 0;
     char *status = malloc(maxCharacters * sizeof(char));
 
-    while (statusLine[index + 1] != ')')
+    while (statusLine[index + 1] != ' ')
     {
         status[j] = statusLine[index + 1];
         j++;
         index++;
     }
+
     return status;
 }
 
@@ -387,8 +349,19 @@ char **InputProcessor(char *line)
 char *LineOutput()
 {
     size_t size = 0;
-    getline(&currentLine, &size, stdin);
+    int length = getline(&currentLine, &size, stdin);
+
+    if (length == -1)
+    {
+        exit(0);
+    }
+    // account for new line from enter
     currentLine[strlen(currentLine) - 1] = '\0';
+    length--;
+    if (length == 0)
+    {
+        return NULL;
+    }
     char *processedLine = malloc(maxCharacters * sizeof(char));
     memcpy(processedLine, currentLine, maxCharacters * sizeof(char));
     return processedLine;
@@ -396,6 +369,7 @@ char *LineOutput()
 
 void PipeProcess(char **pipeTokens, char *history)
 {
+
     int *fd = malloc(2 * sizeof(int));
     pid_t id;
     int fdId = 0;
@@ -418,43 +392,45 @@ void PipeProcess(char **pipeTokens, char *history)
             }
 
             close(fd[0]);
-            ExecuteBasicCommand(pipeTokens[i]);
-            exit(1);
+
+            char **tokens = Tokeniser(pipeTokens[i], " ");
+
+            if (execvp(tokens[0], tokens) == -1)
+            {
+                perror("executing problem");
+                exit(1);
+            }
         }
         else
         {
-            if (isBackgroundTask)
+            if (!isBackgroundTask)
             {
-                waitpid(id, NULL, WNOHANG);
-                 char *status = GetStatus(id);
-
-                Job currentJob;
-                currentJob.jobId = id;
-                currentJob.jobNum = jobNumber;
-                currentJob.status = status;
-                currentJob.commandLine = currentLine;
-
-                printf("[%d]  %d\n", jobNumber, id);
-
-                jobs[jobIndex] = currentJob;
-                numJobs++;
-                jobNumber++;
-                jobIndex++;
-            }
-            else
-            {
-                waitpid(id, NULL, 0);
+                pid_t pid = waitpid(id, NULL, 0);
             }
             close(fd[1]);
             fdId = fd[0];
             i++;
         }
     }
+    // done once
+    if (isBackgroundTask)
+    {
+        char *status = GetStatus(id);
 
-    char *status = GetStatus(id);
+        struct Job currentJob;
+        currentJob.jobId = id;
+        currentJob.jobNum = jobNumber;
+        currentJob.status = status;
+        currentJob.commandLine = currentLine;
 
+        printf("[%d]  %d\n", jobNumber, id);
+
+        jobs[jobIndex] = currentJob;
+        numJobs++;
+        jobNumber++;
+        jobIndex++;
+    }
     numCommands++;
-
     AddToHistory(history);
 }
 
@@ -478,6 +454,21 @@ void PrintTableEntries()
         }
         bottomOfList++;
     }
+}
+
+int JobsCheck(char *line)
+{
+    if (strcmp(line, "jobs") == 0)
+    {
+        int i = 0;
+        while (jobs[i].jobId > 0)
+        {
+            printf("[%d]  <%s>  %s\n", jobs[i].jobId, jobs[i].status, jobs[i].commandLine);
+            i++;
+        }
+        return 1;
+    }
+    return 0;
 }
 
 int SpecialCommandsCheck(char *line)
